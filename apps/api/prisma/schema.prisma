@@ -1,0 +1,224 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// Audit Records
+model AuditRecord {
+  id             String        @id @default(cuid())
+  requestId      String        @unique
+  sessionId      String
+  agentId        String
+  receivedAt     DateTime      @default(now())
+  processedAt    DateTime
+  completedAt    DateTime
+  rawRequest     Json
+  parsedRequest  Json
+  validationResult Json
+  decisionRecord Json
+  executionResult Json?
+  hash           String        @unique
+  previousHash   String?
+  nextHash       String?
+  chainIndex     Int           @default(0)
+  merkleRoot     String?
+  gatewayVersion String
+  environment    String
+  hostname       String
+  processingNode String
+  reviewTicket   ReviewTicket?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  @@index([agentId])
+  @@index([sessionId])
+  @@index([receivedAt])
+  @@index([hash])
+  @@index([chainIndex])
+}
+
+// Human Review Tickets
+model ReviewTicket {
+  id               String          @id @default(cuid())
+  requestId        String          @unique
+  auditRecordId    String          @unique
+  ticketNumber     String          @unique
+  status           ReviewStatus    @default(PENDING)
+  priority         ReviewPriority  @default(NORMAL)
+  agentId          String
+  toolName         String
+  actionName       String
+  riskScore        Float
+  escalatedAt      DateTime        @default(now())
+  assignedTo       String?
+  reviewDeadline   DateTime
+  reviewedAt       DateTime?
+  reviewerNotes    String?
+  reviewerDecision ReviewDecision?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+  auditRecord      AuditRecord     @relation(fields: [auditRecordId], references: [id])
+
+  @@index([status])
+  @@index([priority])
+  @@index([escalatedAt])
+  @@index([assignedTo])
+}
+
+enum ReviewStatus {
+  PENDING
+  IN_REVIEW
+  APPROVED
+  REJECTED
+  EXPIRED
+  CANCELLED
+}
+
+enum ReviewPriority {
+  LOW
+  NORMAL
+  HIGH
+  CRITICAL
+}
+
+enum ReviewDecision {
+  APPROVE
+  REJECT
+  REQUIRE_CHANGES
+}
+
+// Compliance Rules
+model ComplianceRule {
+  id           String        @id @default(cuid())
+  name         String        @unique
+  description  String?
+  type         RuleType
+  category     RuleCategory
+  enabled      Boolean       @default(true)
+  priority     Int           @default(100)
+  field        String
+  operator     RuleOperator
+  value        Json
+  conditions   Json?
+  action       RuleAction
+  actionParams Json?
+  version      Int           @default(1)
+  createdBy    String
+  createdAt    DateTime      @default(now())
+  updatedBy    String
+  updatedAt    DateTime      @updatedAt
+  effectiveFrom DateTime     @default(now())
+  effectiveTo   DateTime?
+  changeHistory Json[]
+
+  @@index([type])
+  @@index([category])
+  @@index([enabled])
+  @@index([effectiveFrom])
+}
+
+enum RuleType {
+  REG_F
+  QM
+  OFAC
+  PII
+  SECURITY
+  BUSINESS
+  CUSTOM
+}
+
+enum RuleCategory {
+  FREQUENCY
+  AMOUNT
+  IDENTITY
+  LOCATION
+  BEHAVIOR
+  RISK
+}
+
+enum RuleOperator {
+  EQUALS
+  NOT_EQUALS
+  GREATER_THAN
+  LESS_THAN
+  GREATER_THAN_OR_EQUAL
+  LESS_THAN_OR_EQUAL
+  CONTAINS
+  NOT_CONTAINS
+  STARTS_WITH
+  ENDS_WITH
+  MATCHES_PATTERN
+  IN
+  NOT_IN
+  BETWEEN
+}
+
+enum RuleAction {
+  ALLOW
+  BLOCK
+  ESCALATE
+  REDACT
+  LOG
+  TRANSFORM
+}
+
+// System Metrics
+model SystemMetric {
+  id         String     @id @default(cuid())
+  timestamp  DateTime   @default(now())
+  metricType MetricType
+  metricName String
+  value      Float
+  labels     Json
+
+  @@index([timestamp])
+  @@index([metricType])
+  @@index([metricName])
+}
+
+enum MetricType {
+  REQUEST_COUNT
+  LATENCY
+  ERROR_RATE
+  VERDICT_DISTRIBUTION
+  VALIDATION_TIME
+  CACHE_HIT_RATE
+  QUEUE_SIZE
+  MEMORY_USAGE
+  CPU_USAGE
+}
+
+// Configuration
+model SystemConfiguration {
+  id           String          @id @default(cuid())
+  key          String          @unique
+  value        Json
+  valueType    ConfigValueType
+  description  String?
+  version      Int             @default(1)
+  isActive     Boolean         @default(true)
+  createdBy    String
+  createdAt    DateTime        @default(now())
+  updatedBy    String
+  updatedAt    DateTime        @updatedAt
+  minValue     Json?
+  maxValue     Json?
+  allowedValues Json?
+
+  @@index([key])
+  @@index([isActive])
+}
+
+enum ConfigValueType {
+  STRING
+  NUMBER
+  BOOLEAN
+  ARRAY
+  OBJECT
+  JSON
+}
