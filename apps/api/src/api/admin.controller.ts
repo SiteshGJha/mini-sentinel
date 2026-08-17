@@ -161,7 +161,7 @@ export class AdminController {
   @ApiOperation({ summary: 'Retrieve gateway performance and rule trigger metrics' })
   @ApiResponse({ status: 200, description: 'Gateway processing times and rule violation metrics returned successfully.' })
   async getMetrics(@Res() reply: FastifyReply) {
-    const summary = this.metricsService.getMetricsSummary();
+    const summary = await this.metricsService.getMetricsSummary();
     const alerts = this.metricsService.getAlerts();
     return reply.status(HttpStatus.OK).send({
       ...summary,

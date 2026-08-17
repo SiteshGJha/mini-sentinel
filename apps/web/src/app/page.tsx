@@ -313,6 +313,26 @@ export default function Dashboard() {
       const data = await res.json();
       setSimulationResult(data);
       fetchData(); // Refresh logs and metrics!
+
+      if (data.status === 'PENDING') {
+        const requestId = data.requestId;
+        const interval = setInterval(async () => {
+          try {
+            const pollRes = await fetch(`${API_BASE}/status/${requestId}`);
+            if (pollRes.ok) {
+              const pollData = await pollRes.json();
+              if (pollData.status !== 'PENDING') {
+                clearInterval(interval);
+                setSimulationResult(pollData);
+                fetchData(); // Refresh logs and metrics on complete!
+              }
+            }
+          } catch (pollErr) {
+            console.error('Error polling simulation status:', pollErr);
+            clearInterval(interval);
+          }
+        }, 1500);
+      }
     } catch (err: any) {
       setSimulationResult({ error: 'Failed to process payload: ' + err.message });
     } finally {
@@ -512,6 +532,24 @@ export default function Dashboard() {
                 {verifyStatus.verified ? 'Chain Secure' : 'Tampered'}
               </span>
             </div>
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-slate-400">Request Pool</span>
+              {(() => {
+                const pendingCount = logs.filter(log => log.decisionRecord?.verdict === 'PENDING').length;
+                return (
+                  <span className={`font-bold flex items-center gap-1.5 ${pendingCount > 0 ? 'text-amber-400' : 'text-emerald-400'}`}>
+                    {pendingCount > 0 ? (
+                      <>
+                        <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
+                        {pendingCount} Processing
+                      </>
+                    ) : (
+                      'Idle'
+                    )}
+                  </span>
+                );
+              })()}
+            </div>
           </div>
         </aside>
 
@@ -596,30 +634,30 @@ export default function Dashboard() {
                     <div>
                       <div className="flex justify-between text-xs font-bold mb-1">
                         <span className="text-emerald-400">APPROVED ({metrics.verdictDistribution?.APPROVE || 0})</span>
-                        <span>{Math.round(((metrics.verdictDistribution?.APPROVE || 0) / metrics.requestCount) * 100)}%</span>
+                        <span>{metrics.requestCount > 0 ? Math.round(((metrics.verdictDistribution?.APPROVE || 0) / metrics.requestCount) * 100) : 0}%</span>
                       </div>
                       <div className="w-full bg-slate-900 h-3 rounded-full overflow-hidden border border-slate-800">
-                        <div className="bg-emerald-500 h-full rounded-full transition-all duration-300" style={{ width: `${((metrics.verdictDistribution?.APPROVE || 0) / metrics.requestCount) * 100}%` }}></div>
+                        <div className="bg-emerald-500 h-full rounded-full transition-all duration-300" style={{ width: `${metrics.requestCount > 0 ? ((metrics.verdictDistribution?.APPROVE || 0) / metrics.requestCount) * 100 : 0}%` }}></div>
                       </div>
                     </div>
 
                     <div>
                       <div className="flex justify-between text-xs font-bold mb-1">
                         <span className="text-rose-400">BLOCKED ({metrics.verdictDistribution?.BLOCK || 0})</span>
-                        <span>{Math.round(((metrics.verdictDistribution?.BLOCK || 0) / metrics.requestCount) * 100)}%</span>
+                        <span>{metrics.requestCount > 0 ? Math.round(((metrics.verdictDistribution?.BLOCK || 0) / metrics.requestCount) * 100) : 0}%</span>
                       </div>
                       <div className="w-full bg-slate-900 h-3 rounded-full overflow-hidden border border-slate-800">
-                        <div className="bg-rose-500 h-full rounded-full transition-all duration-300" style={{ width: `${((metrics.verdictDistribution?.BLOCK || 0) / metrics.requestCount) * 100}%` }}></div>
+                        <div className="bg-rose-500 h-full rounded-full transition-all duration-300" style={{ width: `${metrics.requestCount > 0 ? ((metrics.verdictDistribution?.BLOCK || 0) / metrics.requestCount) * 100 : 0}%` }}></div>
                       </div>
                     </div>
 
                     <div>
                       <div className="flex justify-between text-xs font-bold mb-1">
                         <span className="text-amber-500">ESCALATED ({metrics.verdictDistribution?.ESCALATE || 0})</span>
-                        <span>{Math.round(((metrics.verdictDistribution?.ESCALATE || 0) / metrics.requestCount) * 100)}%</span>
+                        <span>{metrics.requestCount > 0 ? Math.round(((metrics.verdictDistribution?.ESCALATE || 0) / metrics.requestCount) * 100) : 0}%</span>
                       </div>
                       <div className="w-full bg-slate-900 h-3 rounded-full overflow-hidden border border-slate-800">
-                        <div className="bg-amber-500 h-full rounded-full transition-all duration-300" style={{ width: `${((metrics.verdictDistribution?.ESCALATE || 0) / metrics.requestCount) * 100}%` }}></div>
+                        <div className="bg-amber-500 h-full rounded-full transition-all duration-300" style={{ width: `${metrics.requestCount > 0 ? ((metrics.verdictDistribution?.ESCALATE || 0) / metrics.requestCount) * 100 : 0}%` }}></div>
                       </div>
                     </div>
                   </div>
@@ -750,6 +788,58 @@ export default function Dashboard() {
                             {JSON.stringify(simulationResult, null, 2)}
                           </pre>
                         </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Active Processing Pool card */}
+                  <div className="bg-slate-900/40 border border-slate-900 rounded-2xl p-6 flex flex-col gap-4">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                        <Database className="w-4 h-4 text-indigo-400" /> Active Processing Pool (Queue)
+                      </span>
+                      <span className="text-[10px] bg-indigo-500/10 text-indigo-400 font-extrabold px-2 py-0.5 rounded-full">
+                        {logs.filter(log => log.decisionRecord?.verdict === 'PENDING').length} queued
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-slate-400">
+                      Real-time view of compliance check requests currently queued in Redis and being processed by the Python PII microservice.
+                    </p>
+                    
+                    {logs.filter(log => log.decisionRecord?.verdict === 'PENDING').length === 0 ? (
+                      <div className="text-center text-xs text-slate-500 py-6 border border-dashed border-slate-900 rounded-xl flex items-center justify-center gap-2">
+                        <CheckCircle className="w-4 h-4 text-emerald-400" />
+                        <span>All queues are empty. Pool is idle.</span>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col gap-2">
+                        {logs.filter(log => log.decisionRecord?.verdict === 'PENDING').map((pendingReq) => {
+                          const timeElapsed = Math.round((Date.now() - new Date(pendingReq.receivedAt).getTime()) / 1000);
+                          return (
+                            <div key={pendingReq.id} className="bg-slate-950 border border-slate-900 rounded-xl p-3 flex items-center justify-between text-xs transition-colors duration-150 hover:border-slate-800">
+                              <div className="flex flex-col gap-1">
+                                <span className="font-mono text-[10px] text-indigo-400">ID: {pendingReq.requestId.substring(0, 8)}...</span>
+                                <div className="flex items-center gap-1.5">
+                                  <span className="bg-slate-900 border border-slate-800 text-slate-400 font-bold p-0.5 px-2 rounded-lg text-[9px]">
+                                    {pendingReq.rawRequest?.tool}:{pendingReq.rawRequest?.action}
+                                  </span>
+                                  <span className="text-[9px] text-slate-500 font-medium">
+                                    via Port {process.env.PII_SERVICE_PORT || '50051'}
+                                  </span>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <span className="text-[9px] text-slate-400 font-mono">
+                                  {timeElapsed >= 0 ? `${timeElapsed}s ago` : 'just now'}
+                                </span>
+                                <span className="flex items-center gap-1 font-bold text-amber-400">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
+                                  Processing
+                                </span>
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
                     )}
                   </div>

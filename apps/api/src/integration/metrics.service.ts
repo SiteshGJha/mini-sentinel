@@ -91,27 +91,84 @@ export class MetricsService {
     this.alerts = [];
   }
 
-  getMetricsSummary() {
-    const total = this.recentRequests.length;
-    if (total === 0) return { totalRequests: 0, avgLatency: 0, p95Latency: 0, errorRate: 0 };
+  async getMetricsSummary() {
+    // 1. Fetch all audit records from database
+    const records = await this.prisma.auditRecord.findMany({
+      select: {
+        receivedAt: true,
+        completedAt: true,
+        decisionRecord: true,
+      },
+    });
 
-    const sortedLatencies = [...this.recentRequests].map((r) => r.latency).sort((a, b) => a - b);
-    const sum = sortedLatencies.reduce((a, b) => a + b, 0);
-    const avg = sum / total;
-    const p95Idx = Math.min(total - 1, Math.floor(total * 0.95));
-    const p95 = sortedLatencies[p95Idx];
-    const p99Idx = Math.min(total - 1, Math.floor(total * 0.99));
-    const p99 = sortedLatencies[p99Idx];
+    const total = records.length;
 
-    const failed = this.recentRequests.filter((r) => !r.success).length;
-    const errorRate = (failed / total) * 100;
+    // Filter out records that are still PENDING
+    const processedRecords = records.filter((r) => {
+      const decision = r.decisionRecord as any;
+      return decision && decision.verdict !== 'PENDING';
+    });
+
+    const totalProcessed = processedRecords.length;
+
+    // Calculate latency for processed records
+    const latencies = processedRecords.map((r) => {
+      const start = new Date(r.receivedAt).getTime();
+      const end = new Date(r.completedAt).getTime();
+      return Math.max(0, end - start);
+    });
+
+    const avg = totalProcessed > 0 ? latencies.reduce((a, b) => a + b, 0) / totalProcessed : 0;
+
+    // Calculate p95, p99 latency
+    let p95 = 0;
+    let p99 = 0;
+    if (totalProcessed > 0) {
+      const sortedLatencies = [...latencies].sort((a, b) => a - b);
+      const p95Idx = Math.min(totalProcessed - 1, Math.floor(totalProcessed * 0.95));
+      p95 = sortedLatencies[p95Idx];
+      const p99Idx = Math.min(totalProcessed - 1, Math.floor(totalProcessed * 0.99));
+      p99 = sortedLatencies[p99Idx];
+    }
+
+    // Verdict distribution
+    const verdictDistribution = {
+      APPROVE: 0,
+      BLOCK: 0,
+      ESCALATE: 0,
+    };
+
+    records.forEach((r) => {
+      const decision = r.decisionRecord as any;
+      if (decision && decision.verdict) {
+        const v = decision.verdict;
+        if (v === 'APPROVE') verdictDistribution.APPROVE++;
+        else if (v === 'BLOCK') verdictDistribution.BLOCK++;
+        else if (v === 'ESCALATE') verdictDistribution.ESCALATE++;
+      }
+    });
+
+    // Error rate: requests that failed due to internal errors or are blocked due to rules.
+    // Let's count blocked requests with internal error reasoning or general error flags.
+    const failed = records.filter((r) => {
+      const decision = r.decisionRecord as any;
+      return (
+        decision &&
+        (decision.verdict === 'BLOCK' &&
+          (decision.reasoning?.toLowerCase().includes('error') ||
+            decision.reasoning?.toLowerCase().includes('failed')))
+      );
+    }).length;
+    const errorRate = total > 0 ? (failed / total) * 100 : 0;
 
     return {
       totalRequests: total,
+      requestCount: total, // Frontend expects requestCount
       averageLatencyMs: avg,
       p95LatencyMs: p95,
       p99LatencyMs: p99,
       errorRate,
+      verdictDistribution,
     };
   }
 }

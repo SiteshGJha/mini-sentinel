@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import os
 from presidio_analyzer import AnalyzerEngine, PatternRecognizer, Pattern
 from presidio_analyzer.nlp_engine import NlpEngineProvider
 
@@ -207,7 +208,8 @@ async def handle_client(reader, writer):
             pass
 
 async def main():
-    server = await asyncio.start_server(handle_client, '0.0.0.0', 50051)
+    port = int(os.environ.get('PII_SERVICE_PORT', 50051))
+    server = await asyncio.start_server(handle_client, '0.0.0.0', port)
     addr = server.sockets[0].getsockname()
     logger.info(f"Serving PII Redaction TCP socket service on {addr}")
     async with server:
