@@ -135,6 +135,7 @@ export class JobWorkerService implements OnModuleInit, OnModuleDestroy {
         decisionRecord: decision,
         validationResult, // Passing validation results
         executionResult: executionResult || undefined,
+        parsedRequest: redactedRequest,
       });
 
       // 6. Trigger Webhook notifications

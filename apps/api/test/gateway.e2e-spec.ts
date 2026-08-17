@@ -244,6 +244,8 @@ describe('Gateway Interceptor (e2e)', () => {
     const body = await pollStatus(payload.id);
     expect(body.verdict).toBe('BLOCK');
     expect(body.rulesTriggered).toContain('BANKRUPTCY_HOLD');
+    expect(body.redactedParameters.phone).toBe('+XXX-XXX-2222');
+    expect(body.redactedParameters.customerId).toBe('cust_col_2');
   });
 
   it('should override verdict to APPROVE with warnings under OBSERVE mode', async () => {

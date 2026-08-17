@@ -126,7 +126,7 @@ export class AuditService {
 
   async updateRecordAndRecalculate(
     requestId: string,
-    updateData: { decisionRecord: Decision; validationResult?: ValidationResult; executionResult?: ExecutionResult },
+    updateData: { decisionRecord: Decision; validationResult?: ValidationResult; executionResult?: ExecutionResult; parsedRequest?: ParsedRequest },
   ): Promise<AuditRecord> {
     const release = await this.mutex.acquire();
     try {
@@ -145,6 +145,9 @@ export class AuditService {
       };
       if (updateData.validationResult) {
         dataToUpdate.validationResult = updateData.validationResult as any;
+      }
+      if (updateData.parsedRequest) {
+        dataToUpdate.parsedRequest = updateData.parsedRequest as any;
       }
 
       await this.prisma.auditRecord.update({
