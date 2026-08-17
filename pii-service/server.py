@@ -215,7 +215,25 @@ async def handle_client(reader, writer):
                 if not line:
                     continue
                 try:
-                    payload = json.loads(line.decode("utf-8"))
+                    decoded_line = line.decode("utf-8").strip()
+                    if not decoded_line:
+                        continue
+
+                    # Handle HTTP health checks gracefully if probed
+                    if decoded_line.startswith(("GET ", "POST ", "HEAD ", "OPTIONS ", "PUT ", "DELETE ")):
+                        logger.info(f"Received HTTP request on TCP port from {addr}, returning 200 OK")
+                        http_response = (
+                            "HTTP/1.1 200 OK\r\n"
+                            "Content-Type: text/plain\r\n"
+                            "Content-Length: 2\r\n"
+                            "Connection: close\r\n\r\n"
+                            "OK"
+                        )
+                        writer.write(http_response.encode("utf-8"))
+                        await writer.drain()
+                        return
+
+                    payload = json.loads(decoded_line)
                     params = payload.get("parameters", {})
 
                     # Process redaction
@@ -228,6 +246,11 @@ async def handle_client(reader, writer):
                     }
 
                     writer.write(json.dumps(response).encode("utf-8") + b"\n")
+                    await writer.drain()
+                except json.JSONDecodeError as ex:
+                    logger.warning(f"Received non-JSON/invalid payload from {addr}: {ex}")
+                    error_resp = {"error": f"Invalid JSON: {str(ex)}"}
+                    writer.write(json.dumps(error_resp).encode("utf-8") + b"\n")
                     await writer.drain()
                 except Exception as ex:
                     logger.error(f"Error parsing/processing data: {ex}")
