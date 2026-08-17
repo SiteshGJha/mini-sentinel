@@ -4,7 +4,7 @@ import * as net from 'net';
 @Injectable()
 export class TcpClientService {
   private readonly logger = new Logger(TcpClientService.name);
-  private readonly host = process.env.PII_SERVICE_HOST || 'localhost';
+  private readonly host = process.env.PII_SERVICE_HOST || '127.0.0.1';
   private readonly port = parseInt(process.env.PII_SERVICE_PORT || '50051', 10);
 
   async send(payload: any): Promise<any> {

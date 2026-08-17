@@ -29,7 +29,7 @@ RUN printf "#!/bin/sh\npython3 /app/pii-service/server.py &\nnode /app/dist/src/
 RUN chmod +x /app/entrypoint.sh
 
 ENV PORT=3000
-ENV PII_SERVICE_HOST=localhost
+ENV PII_SERVICE_HOST=127.0.0.1
 ENV PII_SERVICE_PORT=50051
 
 EXPOSE 3000
