@@ -148,7 +148,7 @@ export default function Dashboard() {
   const [simulationResult, setSimulationResult] = useState<any | null>(null);
   
   // Classifier States
-  const [classifierInput, setClassifierInput] = useState<string>('Hi, I unfortunately lost my job last week due to layoffs. I cannot afford to make my payment this month, please help.');
+  const [classifierInput, setClassifierInput] = useState<string>('Hi, I unfortunately lost my job last week due to layoffs. please help.');
   const [classifierResult, setClassifierResult] = useState<string | null>(null);
   
   // Review Action notes
